@@ -3,6 +3,11 @@
 
 namespace app::discord
 {
+    User::User() : id(""), username(""), discriminator(""), avatar(""),
+        bot(false), system(false), mfa_enabled(false), authorization("")
+    {
+    }
+
 	User::User(const std::string& token)
 	{
         // CPR MY BELOVED
@@ -76,20 +81,11 @@ namespace app::discord
             if (response.status_code == 200)
             {
                 json json_data;
-                try
-                {
-                    json_data = json::parse(response.text);
-                }
-                catch (const std::exception& e)
-                {
-                    console::error("JSON parsing failed. Exception: {}", e.what());
-                    break;
-                }
+
+                json_data = json::parse(response.text);
 
                 if (json_data.empty())
-                {
                     break;
-                }
 
                 for (const auto& message : json_data)
                 {
