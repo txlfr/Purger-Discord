@@ -53,6 +53,14 @@ namespace app::discord
             cpr::Body{ payload.dump() }
         );
 
+        if (response.status_code == 429) // Rate limit
+        {
+            auto retry_after = nlohmann::json::parse(response.text)["retry_after"].get<int>();
+            console::warn("Rate limit hit. Retrying after {} ms", retry_after);
+               Fiber::get()->yield(retry_after);
+            return send_message(channel_id, message);
+        }
+
         if (response.status_code == 200 || response.status_code == 201)
         {
             console::info("Message sent successfully to channel: {}", channel_id);
@@ -65,24 +73,31 @@ namespace app::discord
 
     std::map<std::string, std::string, std::greater<std::string>> User::get_messages(const std::string& channel_id)
     {
-        std::map<std::string, std::string, std::greater<std::string>> messages; // Use std::greater to sort keys in descending order
+        std::map<std::string, std::string, std::greater<std::string>> messages;
         std::string before;
 
         while (true)
         {
-            std::string api_endpoint = "https://discord.com/api/v9/channels/" + channel_id + "/messages?limit=100" +
-                (before.empty() ? "" : "&before=" + before);
+            Fiber::get()->yield(500ms);
 
+            std::string api_endpoint = "https://discord.com/api/v10/channels/" + channel_id + "/messages?limit=100" +
+                (before.empty() ? "" : "&before=" + before);
             cpr::Response response = cpr::Get(
                 cpr::Url{ api_endpoint },
                 cpr::Header{ {"Authorization", authorization} }
             );
 
+            if (response.status_code == 429) // Rate limit
+            {
+                auto retry_after = nlohmann::json::parse(response.text)["retry_after"].get<int>();
+                console::warn("Rate limit hit. Retrying after {} ms", retry_after);
+                Fiber::get()->yield(retry_after);
+                continue;
+            }
+
             if (response.status_code == 200)
             {
-                json json_data;
-
-                json_data = json::parse(response.text);
+                auto json_data = nlohmann::json::parse(response.text);
 
                 if (json_data.empty())
                     break;
@@ -92,7 +107,6 @@ namespace app::discord
                     if (message.contains("author") && message["author"].contains("id") &&
                         message.contains("id") && message.contains("content"))
                     {
-                        // Only add messages sent by this user
                         if (message["author"]["id"] == id)
                         {
                             messages[message["id"]] = message["content"];
@@ -126,7 +140,23 @@ namespace app::discord
             cpr::Header{ {"Authorization", authorization} }
         );
 
-        return response.status_code == 204;
+        if (response.status_code == 429) 
+        {
+            auto retry_after = nlohmann::json::parse(response.text)["retry_after"].get<int>();
+            console::warn("Rate limit hit. Retrying after {} ms", retry_after);
+               Fiber::get()->yield(retry_after);
+            return delete_message(channel_id, message_id);
+        }
+
+        if (response.status_code == 204)
+        {
+            console::info("Message deleted successfully. Channel: {} | Message ID: {}", channel_id, message_id);
+            return true;
+        }
+
+        console::error("Failed to delete message. HTTP Status: {} | Response: {}", response.status_code, response.text);
+        return false;
     }
+
 
 }
