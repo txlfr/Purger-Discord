@@ -127,7 +127,7 @@ int APIENTRY WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
         std::this_thread::sleep_for(0ms);
 
-        if (GetAsyncKeyState(VK_ESCAPE))
+        if (GetAsyncKeyState(VK_F9))
         {
             break;
         }
